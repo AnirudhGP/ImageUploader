@@ -5,6 +5,13 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
 
 /**
  * Created by aniru on 13-10-2016.
@@ -18,7 +25,9 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     public static final String KEY_COURSEID = "courseId";
     public static final String KEY_URILIST = "uriList";
     public static final String KEY_NOOFPAGESUPLOADED = "noOfPagesUploaded";
-
+    public static final String KEY_TITLE = "title";
+    public static final String KEY_NOTESDESC = "notesDesc";
+    public static final String TAG = "DatabaseHelper";
 
     public NotesDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -27,8 +36,8 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         String CREATE_CONTACTS_TABLE = "CREATE TABLE " + TABLE_PENDING_NOTES + "("
-                + KEY_COURSEID + " TEXT PRIMARY KEY," + KEY_URILIST + " TEXT" + KEY_NOOFPAGESUPLOADED +
-                " INTEGER, " + ")";
+                + KEY_COURSEID + " TEXT PRIMARY KEY, " + KEY_URILIST + " TEXT, " + KEY_NOOFPAGESUPLOADED +
+                " INTEGER, " + KEY_TITLE + " TEXT, " + KEY_NOTESDESC + " TEXT" + ")";
         db.execSQL(CREATE_CONTACTS_TABLE);
     }
 
@@ -41,13 +50,15 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    public void insertPendingNote(PendingNote notes) {
+    public void insertPendingNote(PendingNote notes) throws JSONException {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-
+        JSONArray jsonArray = new JSONArray(notes.getUriList());
         values.put(KEY_COURSEID, notes.getCourseId());
-        values.put(KEY_URILIST, notes.getUriList());
+        values.put(KEY_URILIST, jsonArray.toString());
         values.put(KEY_NOOFPAGESUPLOADED, notes.getNoOfPagesUploaded());
+        values.put(KEY_TITLE, notes.getTitle());
+        values.put(KEY_NOTESDESC, notes.getNotesDesc());
 
         db.insert(TABLE_PENDING_NOTES, null, values);
         db.close();
@@ -57,17 +68,30 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
 
         Cursor cursor = db.query(TABLE_PENDING_NOTES, new String[] { KEY_COURSEID,
-                        KEY_URILIST, KEY_NOOFPAGESUPLOADED }, KEY_COURSEID + "=?",
+                        KEY_URILIST, KEY_NOOFPAGESUPLOADED, KEY_TITLE, KEY_NOTESDESC }, KEY_COURSEID + "=?",
                 new String[] { String.valueOf(courseId) }, null, null,
                 null, null);
         if (cursor != null)
             cursor.moveToFirst();
         else {
-            return new PendingNote(null, null, 0);
+            return null;
+        }
+        JSONArray JSONUriList = null;
+        ArrayList<String> uriList = new ArrayList<>();
+        try {
+            JSONUriList = new JSONArray(cursor.getString(1));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        if (JSONUriList != null) {
+            Log.d(TAG, "jsonarray = " + JSONUriList);
+            for (int i = 0; i < JSONUriList.length(); i++) {
+                uriList.add(JSONUriList.optString(i));
+            }
         }
 
         PendingNote pendingNote = new PendingNote(cursor.getString(0),
-                cursor.getString(1), Integer.parseInt(cursor.getString(3)));
+                uriList, Integer.parseInt(cursor.getString(2)), cursor.getString(3), cursor.getString(4));
 
         return pendingNote;
     }
@@ -75,16 +99,30 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     public PendingNote getNextPendingNote() {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.query(TABLE_PENDING_NOTES, new String[] { KEY_COURSEID,
-                KEY_URILIST, KEY_NOOFPAGESUPLOADED }, null, null, null, null, null,
+                KEY_URILIST, KEY_NOOFPAGESUPLOADED, KEY_TITLE, KEY_NOTESDESC }, null, null, null, null, null,
                 null);
 
         if (cursor != null)
             cursor.moveToFirst();
         else {
-            return new PendingNote(null, null, 0);
+            return null;
         }
+        JSONArray JSONUriList = null;
+        ArrayList<String> uriList = new ArrayList<>();
+        try {
+            JSONUriList = new JSONArray(cursor.getString(1));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        if (JSONUriList != null) {
+            Log.d(TAG, "jsonarray = " + JSONUriList);
+            for (int i = 0; i < JSONUriList.length(); i++) {
+                uriList.add(JSONUriList.optString(i));
+            }
+        }
+
         PendingNote pendingNote = new PendingNote(cursor.getString(0),
-                cursor.getString(1), Integer.parseInt(cursor.getString(3)));
+                uriList, Integer.parseInt(cursor.getString(2)), cursor.getString(3), cursor.getString(4));
 
         return pendingNote;
     }
@@ -112,6 +150,5 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     public void deletePendingNote(String courseId) {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE_PENDING_NOTES, KEY_COURSEID + " = " + courseId, null);
-        db.close();
     }
 }
