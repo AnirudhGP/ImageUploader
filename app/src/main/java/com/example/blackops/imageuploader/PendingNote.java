@@ -12,13 +12,15 @@ public class PendingNote {
     int noOfPagesUploaded;
     String title;
     String notesDesc;
+    ArrayList<String> urls;
 
-    public PendingNote(String cId, ArrayList<String> uList, int pages, String title, String notesDesc) {
+    public PendingNote(String cId, ArrayList<String> uList, int pages, String title, String notesDesc, ArrayList<String> urlList) {
         this.courseId = cId;
         this.uriList = uList;
         this.noOfPagesUploaded = pages;
         this.title = title;
         this.notesDesc = notesDesc;
+        this.urls = urlList;
     }
 
     public ArrayList<String> getUriList() {
@@ -56,4 +58,8 @@ public class PendingNote {
     public void setNotesDesc(String notesDesc) {
         this.notesDesc = notesDesc;
     }
+
+    public ArrayList<String> getUrls() { return this.urls; }
+
+    public void setUrls(ArrayList<String> urlList) { this.urls = urlList; }
 }

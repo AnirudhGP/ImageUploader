@@ -1,6 +1,9 @@
 package com.example.blackops.imageuploader;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ClipData;
 import android.content.ContentUris;
 import android.content.Context;
@@ -15,6 +18,7 @@ import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.NotificationCompat;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
@@ -40,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
     private int SELECT_FILE = 1;
     private String pictureImagePath = "";
     ArrayList<String> uriList;
+
+    public static NotificationManager notificationManager;
+    public static NotificationCompat.Builder builder;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -55,6 +63,27 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         uriList = new ArrayList<>();
+
+        notificationManager =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        builder = new NotificationCompat.Builder(this);
+
+        Intent intent = new Intent(this, NotificationService.class);
+        intent.setAction(Constants.ACTION_PAUSE);
+        PendingIntent pauseIntent = PendingIntent.getService(this, 0,
+                intent, 0);
+        Intent intent1 = new Intent(this, NotificationService.class);
+        intent1.setAction(Constants.ACTION_RESUME);
+        PendingIntent resumeIntent = PendingIntent.getService(this, 0,
+                intent1, 0);
+
+        builder.setContentTitle("Notes Uploader")
+                .setContentText("Uploading notes ")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setPriority(Notification.PRIORITY_MAX)
+                .setOngoing(true)
+                .addAction(0, "Pause", pauseIntent)
+                .addAction(0, "Resume", resumeIntent);
 
         /*uriList.add("url1");
         uriList.add("url2");
@@ -123,7 +152,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void storeImages() {
         Log.d(TAG, "storing " + uriList.size() + " images");
-        PendingNote note = new PendingNote("111", uriList, 0, "haha", "desc");
+        if(uriList.size() == 0) {
+            Log.d(TAG, "No images to upload");
+            return;
+        }
+        PendingNote note = new PendingNote("111", uriList, 0, "haha", "desc", new ArrayList<String>());
         NotesDatabaseHelper notesDatabaseHelper = new NotesDatabaseHelper(getApplicationContext());
         notesDatabaseHelper.deletePendingNote("111");
         try {
@@ -132,6 +165,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (JSONException e) {
             e.printStackTrace();
         }
+        uriList.clear();
         startService(new Intent(this, UploadService.class));
     }
 

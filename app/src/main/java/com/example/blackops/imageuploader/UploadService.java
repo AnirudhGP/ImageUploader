@@ -1,6 +1,8 @@
 package com.example.blackops.imageuploader;
 
+import android.app.ActivityManager;
 import android.app.IntentService;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.CursorLoader;
 import android.content.Intent;
@@ -9,7 +11,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.support.v7.app.NotificationCompat;
 import android.util.Log;
+import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -22,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 
+import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
@@ -37,6 +42,7 @@ import okhttp3.ResponseBody;
 
 public class UploadService extends IntentService {
     private static final String TAG = "UploadService";
+    public static Call call;
 
     public UploadService() {
         super("UploadService");
@@ -48,14 +54,16 @@ public class UploadService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
+        call = null;
         NotesDatabaseHelper notesDatabaseHelper = new NotesDatabaseHelper(
                 this.getApplicationContext());
         PendingNote note = notesDatabaseHelper.getNextPendingNote();
         if (note == null) {
             Log.d(TAG, "No more notes to be uploaded");
-            stopSelf();
+            stopService(new Intent(this, UploadService.class));
+            return;
         }
-        Log.d(TAG, "courseId = " + note.getCourseId());
+        Log.d(TAG, "uploading courseId = " + note.getCourseId() + " pages uploaded = " + note.getNoOfPagesUploaded());
         OkHttpClient client = new OkHttpClient();
         MultipartBody.Builder body = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -67,6 +75,11 @@ public class UploadService extends IntentService {
         File file;
         int pos = note.getNoOfPagesUploaded() + 1;
         ArrayList<String> uriList = note.getUriList();
+        if(uriList == null || uriList.size() == 0) {
+            Log.d(TAG, "No notes to be uploaded");
+            stopService(new Intent(this, UploadService.class));
+            return;
+        }
         Bitmap original = null;
         try {
             InputStream fileInputStream = getContentResolver().openInputStream(Uri.parse(uriList.get(pos-1)));
@@ -82,7 +95,6 @@ public class UploadService extends IntentService {
             e.printStackTrace();
         }
         int size = original.getRowBytes() * original.getHeight();
-        Log.i("sw32size", size + "");
         if (size > 10000000)
             original.compress(Bitmap.CompressFormat.JPEG, 40, out);
         else
@@ -94,10 +106,14 @@ public class UploadService extends IntentService {
                 .url("https://uploadnotes-2016.appspot.com/imgweb")
                 .post(requestBody)
                 .build();
-
         Response response = null;
+        MainActivity.builder.setContentText("Uploading page " + pos + " of " + note.getUriList().size());
+        MainActivity.builder.setProgress(note.getUriList().size(), pos, false);
+        MainActivity.notificationManager.notify(1, MainActivity.builder.build());
         try {
-            response = client.newCall(request).execute();
+            Log.d(TAG, "Started uploading page " + pos);
+            call = client.newCall(request);
+            response = call.execute();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -111,15 +127,34 @@ public class UploadService extends IntentService {
             if (responseBody != null) {
                 jsonresponse = responseBody.string();
             } else {
-               Log.d(TAG, "Upload failed");
+                MainActivity.builder.setContentText("Upload paused");
+                MainActivity.builder.setProgress(0, 0, false);
+                MainActivity.notificationManager.notify(1, MainActivity.builder.build());
+                Log.d(TAG, "Upload failed");
+                stopService(new Intent(this, UploadService.class));
+                return;
             }
 
             if(jsonresponse!=null) {
+                Log.d(TAG, "Finished uploading page " + pos);
                 JSONObject jsonObject = new JSONObject(jsonresponse);
                 Log.d(TAG, jsonObject.getString("url"));
+                notesDatabaseHelper.appendUrlToList(note.getCourseId(), jsonObject.getString("url"));
+                ArrayList<String> urls = note.getUrls();
+                urls.add(jsonObject.getString("url"));
+                note.setUrls(urls);
                 notesDatabaseHelper.incrementPageNumberOfPendingNote(note.getCourseId());
+
+                Log.d(TAG, "done = " + (note.getNoOfPagesUploaded() + 1) + " total = " + note.getUriList().size());
                 if (note.getNoOfPagesUploaded() + 1 == note.getUriList().size()) {
-                    notesDatabaseHelper.deletePendingNote(note.getCourseId());
+                    MainActivity.builder.setContentText("Upload complete");
+                    MainActivity.builder.setProgress(0, 0, false);
+                    MainActivity.builder.setOngoing(false);
+                    MainActivity.notificationManager.notify(1, MainActivity.builder.build());
+                    Log.d(TAG, " Final urls = " + note.getUrls());
+                    int a = notesDatabaseHelper.deletePendingNote(note.getCourseId());
+                    Log.d(TAG, "courseId deleted " + note.getCourseId() + " a = " + a);
+                    stopSelf();
                 }
             }
         }  catch (JSONException e) {
@@ -127,5 +162,7 @@ public class UploadService extends IntentService {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        stopService(new Intent(this, UploadService.class));
+        startService(new Intent(this, UploadService.class));
     }
 }

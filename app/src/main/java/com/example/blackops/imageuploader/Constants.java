@@ -14,4 +14,8 @@ public class Constants {
     public static final String KEY_COURSEID = "courseId";
     public static final String KEY_URILIST = "uriList";
     public static final String KEY_NOOFPAGESUPLOADED = "noOfPagesUploaded";
+
+    public static final String ACTION_PAUSE = "pauseUpload";
+    public static final String ACTION_RESUME = "resumeUpload";
+
 }
