@@ -107,7 +107,8 @@ public class UploadService extends IntentService {
                 .post(requestBody)
                 .build();
         Response response = null;
-        MainActivity.builder.setContentText("Uploading page " + pos + " of " + note.getUriList().size());
+        MainActivity.builder.setContentTitle("Uploading " + note.getTitle());
+        MainActivity.builder.setContentText("Page " + pos + " of " + note.getUriList().size());
         MainActivity.builder.setProgress(note.getUriList().size(), pos, false);
         MainActivity.notificationManager.notify(1, MainActivity.builder.build());
         try {

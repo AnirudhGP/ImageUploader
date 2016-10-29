@@ -186,8 +186,8 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
 
     public int deletePendingNote(String courseId) {
         SQLiteDatabase db = this.getWritableDatabase();
-        return db.delete(TABLE_PENDING_NOTES, KEY_COURSEID + " = " + courseId, null);
-
+        Log.d(TAG, "Deleting course " + courseId);
+        return db.delete(TABLE_PENDING_NOTES, KEY_COURSEID + " = '" + courseId + "'", null);
     }
 
     public int appendUrlToList(String courseId, String url) {

@@ -24,6 +24,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".NoteDetailsActivity"
+            android:label="@string/app_name"
+            android:theme="@style/AppTheme.NoActionBar" />
+
         <service
             android:name=".UploadService"
             android:exported="true"/>
@@ -31,6 +37,7 @@
         <service
             android:name=".NotificationService"
             android:exported="true"/>
+
         <receiver android:name=".WifiReceiver">
             <intent-filter>
                 <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />

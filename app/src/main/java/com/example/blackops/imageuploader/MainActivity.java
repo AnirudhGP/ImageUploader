@@ -5,18 +5,16 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.ClipData;
-import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.app.NotificationCompat;
 import android.support.v7.widget.Toolbar;
@@ -25,25 +23,22 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Button;
-
-import org.json.JSONException;
+import android.widget.GridView;
+import android.widget.Toast;
 
 import java.io.File;
-import java.net.URISyntaxException;
-import java.text.SimpleDateFormat;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-
-import static android.R.attr.action;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     public static final String TAG = "MainActivity";
-    private int REQUEST_CAMERA = 0;
     private int SELECT_FILE = 1;
-    private String pictureImagePath = "";
-    ArrayList<String> uriList;
+    private int CAPTURE_IMAGES_FROM_CAMERA = 2;
+    private int image_count_before = 0;
+    public static ArrayList<String> uriList;
 
     public static NotificationManager notificationManager;
     public static NotificationCompat.Builder builder;
@@ -59,7 +54,10 @@ public class MainActivity extends AppCompatActivity {
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                storeImages();
+                Intent intent = new Intent(getApplicationContext(), NoteDetailsActivity.class);
+                intent.putStringArrayListExtra("uriList", uriList);
+                getApplicationContext().startActivity(intent);
+                uriList.clear();
             }
         });
         uriList = new ArrayList<>();
@@ -85,27 +83,8 @@ public class MainActivity extends AppCompatActivity {
                 .addAction(0, "Pause", pauseIntent)
                 .addAction(0, "Resume", resumeIntent);
 
-        /*uriList.add("url1");
-        uriList.add("url2");
-        PendingNote note = new PendingNote("111", uriList, 0, "haha", "desc");
-        NotesDatabaseHelper notesDatabaseHelper = new NotesDatabaseHelper(getApplicationContext());
-        notesDatabaseHelper.deletePendingNote("111");
-        try {
-            notesDatabaseHelper.insertPendingNote(note);
-            Log.d(TAG, "inserted");
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        PendingNote newNote = notesDatabaseHelper.getNextPendingNote();
-        Log.d(TAG, "Next note : " + newNote.getCourseId() + " " + newNote.getNoOfPagesUploaded() ) ;
-        notesDatabaseHelper.incrementPageNumberOfPendingNote(newNote.getCourseId());
-        newNote = notesDatabaseHelper.getNextPendingNote();
-        Log.d(TAG, "Incremented note : " + newNote.getCourseId() + " " + newNote.getNoOfPagesUploaded() ) ;
-        */
-
-        Button gallery = (Button) findViewById(R.id.gallery);
-        Button camera = (Button) findViewById(R.id.camera);
+        Button gallery = (Button) findViewById(R.id.btnSelectPhoto);
+        Button camera = (Button) findViewById(R.id.btnCamera);
 
         gallery.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -120,7 +99,6 @@ public class MainActivity extends AppCompatActivity {
                 cameraIntent();
             }
         });
-
     }
 
     private void galleryIntent()
@@ -134,53 +112,68 @@ public class MainActivity extends AppCompatActivity {
 
     private void cameraIntent()
     {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = timeStamp + ".jpg";
+        Cursor cursor = loadCursor();
+        image_count_before = cursor.getCount();
+        cursor.close();
 
-        File storageDir = Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES);
-        pictureImagePath = storageDir.getAbsolutePath() + "/" + imageFileName;
-        File photoFile = new File(pictureImagePath);
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT,
-                    Uri.fromFile(photoFile));
-            Bundle data = new Bundle();
-            startActivityForResult(takePictureIntent, REQUEST_CAMERA, data);
-        }
+        Intent cameraIntent = new Intent(
+                MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA);
+        List<ResolveInfo> activities = getPackageManager()
+                .queryIntentActivities(cameraIntent, 0);
+        if (activities.size() > 0)
+            startActivityForResult(cameraIntent, CAPTURE_IMAGES_FROM_CAMERA);
+        else
+            Toast.makeText(this, "No Camera application", Toast.LENGTH_SHORT)
+                    .show();
     }
 
-    private void storeImages() {
-        Log.d(TAG, "storing " + uriList.size() + " images");
-        if(uriList.size() == 0) {
-            Log.d(TAG, "No images to upload");
-            return;
-        }
-        PendingNote note = new PendingNote("111", uriList, 0, "haha", "desc", new ArrayList<String>());
-        NotesDatabaseHelper notesDatabaseHelper = new NotesDatabaseHelper(getApplicationContext());
-        notesDatabaseHelper.deletePendingNote("111");
-        try {
-            notesDatabaseHelper.insertPendingNote(note);
-            Log.d(TAG, "inserted");
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        uriList.clear();
-        startService(new Intent(this, UploadService.class));
+
+    public Cursor loadCursor() {
+        final String[] columns = { MediaStore.Images.Media.DATA,
+                MediaStore.Images.Media._ID };
+        final String orderBy = MediaStore.Images.Media.DATE_ADDED;
+        return getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, columns, null,
+                null, orderBy);
     }
 
-    private int action;
+    public String[] getImagePaths(Cursor cursor, int startPosition) {
+        int size = cursor.getCount() - startPosition;
+        if (size <= 0)
+            return null;
+        String[] paths = new String[size];
+        int dataColumnIndex = cursor
+                .getColumnIndex(MediaStore.Images.Media.DATA);
+        for (int i = startPosition; i < cursor.getCount(); i++) {
+            cursor.moveToPosition(i);
+            paths[i - startPosition] = cursor.getString(dataColumnIndex);
+        }
+        return paths;
+    }
+
+    private void exitingCamera() {
+        Cursor cursor = loadCursor();
+        String[] paths = getImagePaths(cursor, image_count_before);
+        cursor.close();
+        getUris(paths);
+    }
+
+    private void getUris(String[] paths) {
+        for (int i = 0; i < paths.length; i++) {
+            uriList.add(Uri.fromFile(new File(paths[i])).toString());
+            Log.d(TAG, "uri from camera = " + Uri.fromFile(new File(paths[i])).toString());
+        }
+    }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == CAPTURE_IMAGES_FROM_CAMERA) {
+            exitingCamera();
+        }
         if (resultCode == Activity.RESULT_OK) {
             if (requestCode == SELECT_FILE) {
                 onSelectFromGalleryResult(data);
-                action = 0;
-            } else if (requestCode == REQUEST_CAMERA) {
-                onCaptureImageResult(data);
-                action = 1;
             }
         }
     }
@@ -189,11 +182,6 @@ public class MainActivity extends AppCompatActivity {
         if (data.getData() != null) {
             Uri path =  data.getData();
             uriList.add(path.toString());
-            /*try {
-                uriList.add(getFilePath(MainActivity.this,path));
-            } catch (URISyntaxException e) {
-                e.printStackTrace();
-            }*/
             Log.d(TAG, "uri from gallery single = " + path.toString());
         }
         else
@@ -202,84 +190,9 @@ public class MainActivity extends AppCompatActivity {
             for (int i=0; i<clipData.getItemCount();i++) {
                 Uri uripath = clipData.getItemAt(i).getUri();
                 uriList.add(uripath.toString());
-                /*try {
-                    uriList.add(getFilePath(MainActivity.this,uripath));
-                } catch (URISyntaxException e) {
-                    e.printStackTrace();
-                }*/
                 Log.d(TAG, "uri from gallery multiple = " + uripath.toString());
             }
         }
-    }
-
-    private void onCaptureImageResult(Intent data) {
-        File imgFile = new File(pictureImagePath);
-        uriList.add(Uri.fromFile(imgFile).toString());
-        // uriList.add(pictureImagePath);
-        Log.d(TAG, "uri from camera = " + Uri.fromFile(imgFile).toString());
-    }
-
-
-    public static String getFilePath(Context context, Uri uri) throws URISyntaxException {
-        String selection = null;
-        String[] selectionArgs = null;
-        // Uri is different in versions after KITKAT (Android 4.4), we need to
-        if (Build.VERSION.SDK_INT >= 19 && DocumentsContract.isDocumentUri(context.getApplicationContext(), uri)) {
-            if (isExternalStorageDocument(uri)) {
-                final String docId = DocumentsContract.getDocumentId(uri);
-                final String[] split = docId.split(":");
-                return Environment.getExternalStorageDirectory() + "/" + split[1];
-            } else if (isDownloadsDocument(uri)) {
-                final String id = DocumentsContract.getDocumentId(uri);
-                uri = ContentUris.withAppendedId(
-                        Uri.parse("content://downloads/public_downloads"), Long.valueOf(id));
-            } else if (isMediaDocument(uri)) {
-                final String docId = DocumentsContract.getDocumentId(uri);
-                final String[] split = docId.split(":");
-                final String type = split[0];
-                if ("image".equals(type)) {
-                    uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-                } else if ("video".equals(type)) {
-                    uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-                } else if ("audio".equals(type)) {
-                    uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-                }
-                selection = "_id=?";
-                selectionArgs = new String[]{
-                        split[1]
-                };
-            }
-        }
-        if ("content".equalsIgnoreCase(uri.getScheme())) {
-            String[] projection = {
-                    MediaStore.Images.Media.DATA
-            };
-            Cursor cursor = null;
-            try {
-                cursor = context.getContentResolver()
-                        .query(uri, projection, selection, selectionArgs, null);
-                int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-                if (cursor.moveToFirst()) {
-                    return cursor.getString(column_index);
-                }
-            } catch (Exception e) {
-            }
-        } else if ("file".equalsIgnoreCase(uri.getScheme())) {
-            return uri.getPath();
-        }
-        return null;
-    }
-
-    public static boolean isExternalStorageDocument(Uri uri) {
-        return "com.android.externalstorage.documents".equals(uri.getAuthority());
-    }
-
-    public static boolean isDownloadsDocument(Uri uri) {
-        return "com.android.providers.downloads.documents".equals(uri.getAuthority());
-    }
-
-    public static boolean isMediaDocument(Uri uri) {
-        return "com.android.providers.media.documents".equals(uri.getAuthority());
     }
 
     @Override
