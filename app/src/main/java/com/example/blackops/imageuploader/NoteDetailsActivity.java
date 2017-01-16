@@ -72,7 +72,6 @@ public class NoteDetailsActivity extends AppCompatActivity {
                 }
             }
         });
-
     }
 
     private void storeImages() {

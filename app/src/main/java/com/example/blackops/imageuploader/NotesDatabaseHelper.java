@@ -18,7 +18,7 @@ import java.util.ArrayList;
 
 public class NotesDatabaseHelper extends SQLiteOpenHelper {
 
-    public static final int DATABASE_VERSION = 1;
+    public static final int DATABASE_VERSION = 2;
     public static final String DATABASE_NAME = "notesManager";
     public static final String TABLE_PENDING_NOTES = "pendingNotes";
     public static final String KEY_COURSEID = "courseId";
@@ -37,7 +37,7 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         String CREATE_CONTACTS_TABLE = "CREATE TABLE " + TABLE_PENDING_NOTES + "("
                 + KEY_COURSEID + " TEXT PRIMARY KEY, " + KEY_URILIST + " TEXT, " + KEY_NOOFPAGESUPLOADED +
-                " INTEGER, " + KEY_TITLE + " TEXT, " + KEY_NOTESDESC + " TEXT, " + KEY_URLS + " TEXT " + ")";
+                " INTEGER, " + KEY_TITLE + " TEXT, " + KEY_NOTESDESC + " TEXT, " + KEY_URLS + " TEXT" + ");";
         db.execSQL(CREATE_CONTACTS_TABLE);
     }
 
@@ -47,6 +47,14 @@ public class NotesDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_PENDING_NOTES);
 
         // Create tables again
+        onCreate(db);
+    }
+
+    public void deleteNotesDatabase() {
+        // Drop older table if existed
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_PENDING_NOTES);
+
         onCreate(db);
     }
 

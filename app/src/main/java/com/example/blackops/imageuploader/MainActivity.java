@@ -9,9 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
@@ -23,12 +22,9 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Button;
-import android.widget.GridView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 Intent intent = new Intent(getApplicationContext(), NoteDetailsActivity.class);
                 intent.putStringArrayListExtra("uriList", uriList);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getApplicationContext().startActivity(intent);
                 uriList.clear();
             }
@@ -99,6 +96,8 @@ public class MainActivity extends AppCompatActivity {
                 cameraIntent();
             }
         });
+
+
     }
 
     private void galleryIntent()
@@ -108,6 +107,7 @@ public class MainActivity extends AppCompatActivity {
         intent.setAction(Intent.ACTION_GET_CONTENT);
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         startActivityForResult(Intent.createChooser(intent, "Select File"),SELECT_FILE);
+
     }
 
     private void cameraIntent()
@@ -115,7 +115,6 @@ public class MainActivity extends AppCompatActivity {
         Cursor cursor = loadCursor();
         image_count_before = cursor.getCount();
         cursor.close();
-
         Intent cameraIntent = new Intent(
                 MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA);
         List<ResolveInfo> activities = getPackageManager()
